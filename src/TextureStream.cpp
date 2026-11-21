@@ -748,12 +748,16 @@ namespace TextureStream
 				a_res.file.fi = job.fi;
 				g_cacheHits.fetch_add(1, std::memory_order_relaxed);
 			}
-			std::unique_ptr<RE::BSResourceNiBinaryStream> stream;
+			// Held in place, not on the heap: the game's constructor leaves the game's vtable in the object, so `delete` would
+			// run the game's deleting destructor and free memory from our CRT heap with the game's allocator (crash with
+			// Engine Fixes). MSVC hides this by restoring the vtable after CommonLib's delegating constructor; other
+			// compilers (clang-cl) do not. Destroying in place never frees, whichever vtable the object carries.
+			std::optional<RE::BSResourceNiBinaryStream> stream;
 			if (!fromCache) {
 			if (job.reload) {
 				g_cacheMisses.fetch_add(1, std::memory_order_relaxed);
 			}
-			stream = std::make_unique<RE::BSResourceNiBinaryStream>(job.path);
+			stream.emplace(job.path);
 			a_res.error = ReadHeader(*stream, a_res.file);
 			if (!a_res.error.empty() || !job.reload) {
 				return;
@@ -769,7 +773,7 @@ namespace TextureStream
 			}
 			if (skipBytes > 0 && !SkipBytes(*stream, skipBytes)) {
 				// Springen nicht moeglich (z. B. komprimiertes Archiv) -> neu oeffnen und ueberlesen
-				stream = std::make_unique<RE::BSResourceNiBinaryStream>(job.path);
+				stream.emplace(job.path);
 				FileInfo again;
 				if (!ReadHeader(*stream, again).empty() || !DiscardBytes(*stream, skipBytes)) {
 					a_res.error = "read error while skipping";

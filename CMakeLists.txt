@@ -65,7 +65,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE src extern/tracy/public)
 # (Firewall-Abfrage bei Nutzern, 1.0.3). Ohne TRACY_ENABLE sind alle Tracy-Makros leer.
 option(SPS_TRACY "Tracy-Profiler einbauen (Entwicklung)" OFF)
 target_compile_definitions(${PROJECT_NAME} PRIVATE TRACY_ON_DEMAND TRACY_NO_CRASH_HANDLER NOMINMAX)
-target_compile_definitions(${PROJECT_NAME} PRIVATE SPS_VERSION="${PROJECT_VERSION}")
+# SPS_VERSION_SUFFIX marks builds that are not the official release in SPS.log (e.g. -DSPS_VERSION_SUFFIX=-linux1)
+set(SPS_VERSION_SUFFIX "" CACHE STRING "Text appended to the version shown in SPS.log")
+target_compile_definitions(${PROJECT_NAME} PRIVATE SPS_VERSION="${PROJECT_VERSION}${SPS_VERSION_SUFFIX}")
 if(SPS_VR)
 	target_compile_definitions(${PROJECT_NAME} PRIVATE SPS_VR=1)
 endif()
@@ -84,6 +86,12 @@ set_source_files_properties(src/DetourHelper.cpp src/GpuMemory.cpp src/GpuTimer.
 
 set_source_files_properties(extern/tracy/public/TracyClient.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON COMPILE_OPTIONS "/W0")
 target_compile_options(${PROJECT_NAME} PRIVATE /W4 /permissive- /utf-8)
+# clang-cl (Linux cross build): __try/__except catches a fault raised by an instruction inside the guarded block only
+# with asynchronous exceptions (/EHa); MSVC always does. ReadDesc and SafeGather in TextureStream.cpp read through
+# pointers that may be stale and rely on it (tested: with /EHsc the same guard crashes on a bad pointer).
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+	target_compile_options(${PROJECT_NAME} PRIVATE /EHa)
+endif()
 
 # DLL verweist nur auf den PDB-Dateinamen (liegt neben der DLL) -> laufendes Skyrim sperrt nicht die Build-PDB
 target_link_options(${PROJECT_NAME} PRIVATE "/PDBALTPATH:%_PDB%")
